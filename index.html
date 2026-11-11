@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#183c32">
     <meta name="description" content="LiveStock helps poultry farmers track flocks, find veterinary support, and connect with buyers.">
+    <meta name="livestock-sync-endpoint" content="">
     <title>LiveStock | Poultry farm companion</title>
+    <link rel="manifest" href="manifest.webmanifest">
     <link rel="stylesheet" href="styles.css">
     <script src="app.js" defer></script>
   </head>
@@ -21,6 +23,7 @@
           <button class="nav-link active" type="button" data-view="dashboard"><span aria-hidden="true">⌂</span> Overview</button>
           <button class="nav-link" type="button" data-view="flocks"><span aria-hidden="true">◉</span> My flocks</button>
           <button class="nav-link" type="button" data-view="health"><span aria-hidden="true">＋</span> Health & vets</button>
+          <button class="nav-link" type="button" data-view="feed-calculator"><span aria-hidden="true">≋</span> Feed calculator</button>
           <button class="nav-link" type="button" data-view="market"><span aria-hidden="true">▤</span> Marketplace</button>
         </nav>
         <div class="sidebar-note">
@@ -44,6 +47,7 @@
             <button class="avatar-button" type="button" aria-label="Farmer profile">KA</button>
           </div>
         </header>
+        <div id="connection-status" class="connection-status" role="status" hidden></div>
 
         <div class="content-wrap">
           <section class="view active" id="dashboard-view" aria-labelledby="welcome-title">
@@ -69,7 +73,7 @@
               </article>
               <article class="stat-card">
                 <div class="stat-icon blue" aria-hidden="true">▤</div>
-                <div><p>Eggs collected</p><strong>186 <small class="unit">trays</small></strong><small>This week</small></div>
+                <div><p>Eggs collected</p><strong><span id="eggs-this-week">0</span> <small class="unit">trays</small></strong><small>This week</small></div>
                 <span class="stat-sparkline blue-line" aria-hidden="true">▂▄▃▅▄▆</span>
               </article>
               <article class="stat-card">
@@ -106,6 +110,17 @@
             </div>
             <div class="flock-grid full-flock-grid" id="all-flocks"></div>
             <article class="panel log-panel">
+              <div class="panel-heading"><div><h2>Egg collection</h2><p>Record trays collected by flock. Records are saved in this browser.</p></div></div>
+              <form id="egg-form" class="form-grid">
+                <label>Flock<select name="flock" id="egg-flock" required></select></label>
+                <label>Trays collected<input name="trays" type="number" min="0.1" step="0.1" required placeholder="e.g. 12"></label>
+                <label>Date<input name="date" type="date" required></label>
+                <label>Notes<input name="notes" maxlength="180" placeholder="Optional"></label>
+                <div class="form-actions"><button class="button button-primary" type="submit">Save collection</button><span class="form-status" id="egg-status" role="status"></span></div>
+              </form>
+              <div class="table-wrap egg-table-wrap"><table><thead><tr><th>Date</th><th>Flock</th><th>Trays</th><th>Notes</th></tr></thead><tbody id="egg-table"></tbody></table></div>
+            </article>
+            <article class="panel log-panel">
               <div class="panel-heading"><div><h2>Record an update</h2><p>Add a note to your farm log. Records are saved in this browser.</p></div></div>
               <form id="log-form" class="form-grid">
                 <label>Flock<select name="flock" id="log-flock" required></select></label>
@@ -136,9 +151,20 @@
                     <textarea id="symptoms" rows="4" maxlength="500" required placeholder="Describe changes in behavior, appetite, droppings, breathing, or egg production."></textarea>
                   </label>
                   <label class="check-row"><input id="urgent-signs" type="checkbox"> <span>Severe signs: sudden deaths, breathing difficulty, inability to stand, or rapid spread</span></label>
+                  <label class="photo-field">Photos of the condition
+                    <input id="health-photos" type="file" accept="image/*" capture="environment" multiple>
+                    <small>Take a picture or choose existing images. Up to 5 photos, 10 MB each.</small>
+                  </label>
+                  <div id="health-photo-previews" class="photo-preview-grid" aria-live="polite"></div>
+                  <span id="health-photo-status" class="form-status" role="status"></span>
                   <button class="button button-primary" type="submit">Prepare next steps</button>
                 </form>
                 <div id="health-result" class="health-result" role="status" hidden></div>
+                <div id="health-share-actions" class="health-share-actions" hidden>
+                  <button id="share-health-report" class="button button-soft" type="button">↗ <span>Share photos with vet</span></button>
+                  <span id="health-share-status" class="form-status" role="status"></span>
+                </div>
+                <p class="photo-sharing-note">Photos stay on this device until you choose Share. LiveStock does not upload them to a server.</p>
                 <p class="disclaimer"><strong>Important:</strong> LiveStock does not diagnose illness or prescribe treatment. A qualified veterinary professional must assess your birds and confirm care.</p>
               </article>
               <article class="panel vet-panel">
@@ -154,26 +180,162 @@
             <article class="safety-banner"><span aria-hidden="true">✦</span><p><strong>Medicines need the right guidance.</strong> Never use a medicine based only on an app suggestion. Use verified suppliers and follow the advice of a qualified vet.</p></article>
           </section>
 
+          <section class="view" id="feed-calculator-view" aria-labelledby="feed-calculator-title" hidden>
+            <div class="page-heading">
+              <div><p class="eyebrow">FEED PLANNING</p><h1 id="feed-calculator-title">Feed calculator</h1><p class="subheading">Cost a formulation for your flock using ingredients and prices you have.</p></div>
+            </div>
+            <article class="panel feed-recommendations-panel">
+              <div class="panel-heading"><div><h2>Feed recommendations</h2><p>Alerts are based on your saved feed records and supplier reports.</p></div></div>
+              <div id="feed-recommendations" class="feed-recommendations" aria-live="polite"></div>
+              <p class="recommendation-rules">Alerts flag price rises of 10% or more, consumption differences of 25% or more from the planning estimate, and same-ingredient quotes at least 5% lower. Supplier and feed quality are not verified.</p>
+            </article>
+            <div class="feed-calculator-grid">
+              <article class="panel feed-input-panel">
+                <div class="panel-heading"><div><h2>Flock and batch</h2><p>Set the amount of feed you want to prepare.</p></div></div>
+                <form id="feed-calc-form" class="stack-form">
+                  <div class="feed-flock-fields">
+                    <label>Bird type<select id="feed-bird-type" required><option value="broiler">Broiler</option><option value="layer">Layer</option></select></label>
+                    <label>Age (weeks)<input id="feed-bird-age" type="number" min="0" max="100" step="1" value="4" required></label>
+                    <label>Number of birds<input id="feed-bird-count" type="number" min="1" step="1" value="100" required></label>
+                    <label>Days of feed to prepare<input id="feed-days" type="number" min="1" max="60" step="1" value="1" required></label>
+                    <label>Feed per bird per day (g)<input id="feed-daily-intake" type="number" min="1" step="1" required></label>
+                    <label>Budget (GHS)<input id="feed-budget" type="number" min="0.01" step="0.01" required placeholder="e.g. 500"></label>
+                  </div>
+                  <p id="feed-stage-hint" class="feed-stage-hint"></p>
+                  <div class="feed-ingredients-heading"><div><h2>Available ingredients</h2><p>Enter a price per kg and inclusion percentage for each ingredient in your approved recipe.</p></div></div>
+                  <div class="table-wrap feed-ingredient-table-wrap">
+                    <table class="feed-ingredient-table"><thead><tr><th scope="col">Available</th><th scope="col">Ingredient</th><th scope="col">Price / kg (GHS)</th><th scope="col">Inclusion (%)</th></tr></thead><tbody id="feed-ingredient-rows"></tbody></table>
+                  </div>
+                  <div class="form-actions"><button class="button button-primary" type="submit">Calculate feed cost</button><span id="feed-calc-status" class="form-status" role="alert"></span></div>
+                </form>
+              </article>
+              <div class="feed-results-column">
+                <article class="panel feed-result-panel" id="feed-calc-result" hidden aria-live="polite">
+                  <div class="panel-heading"><div><h2>Cost estimate</h2><p id="feed-result-summary"></p></div></div>
+                  <div class="feed-cost-summary">
+                    <div><span>Estimated batch cost</span><strong id="feed-total-cost"></strong></div>
+                    <div><span>Cost per kg</span><strong id="feed-cost-per-kg"></strong></div>
+                    <div><span>Budget</span><strong id="feed-budget-result"></strong></div>
+                  </div>
+                  <div class="table-wrap feed-cost-table-wrap"><table><thead><tr><th scope="col">Ingredient</th><th scope="col">Mix</th><th scope="col">Amount</th><th scope="col">Cost</th></tr></thead><tbody id="feed-cost-rows"></tbody></table></div>
+                  <p id="feed-budget-status" class="feed-budget-status" role="status"></p>
+                </article>
+                <aside class="safety-banner feed-nutrition-note"><span aria-hidden="true">✦</span><p><strong>Costing is not nutrition validation.</strong> This tool checks recipe percentages and estimates cost only. It does not verify protein, energy, amino acids, minerals, or vitamin requirements. Use a formulation approved by a qualified poultry nutritionist or veterinarian.</p></aside>
+              </div>
+            </div>
+            <section class="feed-usage-section" aria-labelledby="feed-usage-title">
+              <div class="section-heading"><div><h2 id="feed-usage-title">Feed use and stock</h2><p>Log daily flock use and feed spending to track costs and stock cover.</p></div></div>
+              <div class="feed-usage-grid">
+                <article class="panel feed-usage-entry-panel">
+                  <div class="panel-heading"><div><h2>Daily feed record</h2><p>Records are saved in this browser.</p></div></div>
+                  <form id="feed-use-form" class="form-grid">
+                    <label>Bird type<select name="birdType" required><option value="broiler">Broiler</option><option value="layer">Layer</option></select></label>
+                    <label>Bird age (weeks)<input name="ageWeeks" type="number" min="0" max="100" step="1" required value="4"></label>
+                    <label>Number of birds<input name="birds" type="number" min="1" step="1" required value="100"></label>
+                    <label>Feed used daily (kg)<input name="dailyFeedKg" type="number" min="0.01" step="0.01" required placeholder="e.g. 10"></label>
+                    <label>Feed spend on this date (GHS)<input name="amountSpent" type="number" min="0" step="0.01" required value="0"></label>
+                    <label>Feed remaining in storage (kg)<input name="stockRemaining" type="number" min="0" step="0.01" required placeholder="e.g. 120"></label>
+                    <label>Date<input name="date" type="date" required></label>
+                    <div class="form-actions"><button class="button button-primary" type="submit">Save daily record</button><span id="feed-use-status" class="form-status" role="status"></span></div>
+                  </form>
+                  <p class="offline-help">Records are saved on this device. Cross-device sync requires a configured server connection.</p>
+                </article>
+                <article class="panel feed-usage-summary-panel">
+                  <div class="panel-heading"><div><h2>Feed summary</h2><p>Based on your latest record and dated spend entries.</p></div></div>
+                  <label class="feed-planning-days">Estimate requirements for (days)<input id="feed-requirement-days" type="number" min="1" max="90" step="1" value="7"></label>
+                  <div class="feed-usage-stats">
+                    <div><span>Daily feed consumption</span><strong id="feed-use-daily">No records</strong></div>
+                    <div><span>Daily per bird</span><strong id="feed-use-per-bird">No records</strong></div>
+                    <div><span>Feed spend · 7 days</span><strong id="feed-use-weekly">No records</strong></div>
+                    <div><span>Feed spend · 30 days</span><strong id="feed-use-monthly">No records</strong></div>
+                    <div><span>Feed remaining</span><strong id="feed-use-stock">No records</strong></div>
+                    <div><span>Estimated feed required</span><strong id="feed-use-required">No records</strong></div>
+                  </div>
+                  <p id="feed-stock-status" class="feed-stock-status" role="status">Save a daily record to see consumption, costs, and estimated stock cover.</p>
+                </article>
+              </div>
+              <article class="panel feed-usage-history-panel">
+                <div class="panel-heading"><div><h2>Recent feed records</h2><p>Most recent dates first</p></div></div>
+                <div class="table-wrap"><table><thead><tr><th scope="col">Date</th><th scope="col">Birds</th><th scope="col">Feed used / day</th><th scope="col">Spend</th><th scope="col">Stock remaining</th></tr></thead><tbody id="feed-use-history"></tbody></table></div>
+              </article>
+            </section>
+            <section class="feed-profitability-section" aria-labelledby="feed-profitability-title">
+              <div class="section-heading"><div><h2 id="feed-profitability-title">Feed cost and profitability</h2><p>Estimate feed cost per bird and model savings across a production cycle.</p></div></div>
+              <article class="panel feed-impact-panel">
+                <form id="feed-impact-form" class="form-grid">
+                  <label>Cycle start<input id="feed-cycle-start" name="start" type="date" required></label>
+                  <label>Cycle end<input id="feed-cycle-end" name="end" type="date" required></label>
+                  <label>Birds in this cycle<input name="birds" type="number" min="1" step="1" required value="100"></label>
+                  <label>Feed spend this cycle (GHS)<input id="feed-cycle-spend" name="spend" type="number" min="0" step="0.01" required placeholder="e.g. 10000"></label>
+                  <label>Potential saving from comparable quote (%)<input name="savingsPercent" type="number" min="0" max="100" step="0.1" required value="0"></label>
+                  <div class="feed-impact-actions">
+                    <button class="button button-soft" id="use-logged-cycle-spend" type="button">Use logged spend</button>
+                    <span id="feed-cycle-source-status" class="form-status" role="status"></span>
+                  </div>
+                  <div class="form-actions"><button class="button button-primary" type="submit">Estimate cycle impact</button><span id="feed-impact-status" class="form-status" role="status"></span></div>
+                </form>
+                <div class="feed-impact-results" id="feed-impact-results" hidden aria-live="polite">
+                  <div><span>Current feed cost / bird</span><strong id="feed-impact-per-bird"></strong></div>
+                  <div><span>Potential cycle savings</span><strong id="feed-impact-savings"></strong></div>
+                  <div><span>Feed spend after switch</span><strong id="feed-impact-adjusted-spend"></strong></div>
+                  <div><span>Potential profit uplift*</span><strong id="feed-impact-profit-uplift"></strong></div>
+                </div>
+                <p class="feed-impact-disclaimer"><strong>Scenario only.</strong> Enter a saving based on a supplier you have checked. The app does not verify suppliers or confirm equal feed quality or nutrition. *Savings increase profit by the same amount only if feed quality, bird performance, and all other costs remain equivalent.</p>
+              </article>
+            </section>
+          </section>
+
           <section class="view" id="market-view" aria-labelledby="market-title" hidden>
             <div class="page-heading">
               <div><p class="eyebrow">GROW YOUR BUSINESS</p><h1 id="market-title">Marketplace</h1><p class="subheading">Create a listing and connect with potential buyers.</p></div>
               <button class="button button-primary" type="button" id="show-listing-form">＋ <span>Create a listing</span></button>
             </div>
-            <div class="market-banner"><div><span class="market-kicker">LOCAL CONNECTIONS</span><h2>Your next customer could be nearby.</h2><p>List eggs or birds, share availability, and start a conversation with buyers.</p></div><span class="market-art" aria-hidden="true">✳</span></div>
+            <div class="market-banner"><div><span class="market-kicker">LOCAL CONNECTIONS</span><h2>Buy and sell poultry feed.</h2><p>Post available feed or publish a buy order, alongside eggs and birds.</p></div><span class="market-art" aria-hidden="true">✳</span></div>
+            <section class="price-comparison" aria-labelledby="supplier-prices-title">
+              <div class="section-heading supplier-price-heading">
+                <div><h2 id="supplier-prices-title">Feed ingredient prices</h2><p id="supplier-quote-count">Compare supplier quotes by price per kg.</p></div>
+                <button class="button button-soft" type="button" id="show-supplier-quote-form">＋ <span>Add a supplier quote</span></button>
+              </div>
+              <p class="market-note price-disclaimer">Example suppliers and prices are for demonstration only, not verified or live quotes. Confirm current prices, bag weights, and product quality directly with suppliers. Quotes you add are saved only in this browser.</p>
+              <article class="panel supplier-quote-panel" id="supplier-quote-panel" hidden>
+                <div class="panel-heading"><div><h2>Record a supplier quote</h2><p>Enter the price and bag weight to compare cost per kg.</p></div></div>
+                <form id="supplier-quote-form" class="form-grid">
+                  <label>Supplier<input name="supplier" maxlength="80" required placeholder="Supplier or shop name"></label>
+                  <label>Ingredient<select name="ingredient" required><option>Maize</option><option>Soybean meal</option><option>Fishmeal</option><option>Wheat bran</option><option>Premixes</option></select></label>
+                  <label>Price per bag (GHS)<input name="price" type="number" min="0.01" step="0.01" required placeholder="0.00"></label>
+                  <label>Bag weight (kg)<input name="bagKg" type="number" min="0.1" step="0.1" required placeholder="e.g. 50"></label>
+                  <label>Location<input name="location" maxlength="80" required placeholder="Town or district"></label>
+                  <label>Quote date<input name="date" type="date" required></label>
+                  <div class="form-actions"><button class="button button-primary" type="submit">Save quote</button><span class="form-status" id="supplier-quote-status" role="status"></span></div>
+                </form>
+              </article>
+              <div class="market-heading supplier-price-toolbar">
+                <div><h2>Supplier quotes</h2></div>
+                <div class="supplier-price-controls">
+                  <label class="listing-filter"><span class="visually-hidden">Filter ingredient</span><select id="supplier-ingredient-filter" aria-label="Filter by ingredient"><option value="all">All ingredients</option><option>Maize</option><option>Soybean meal</option><option>Fishmeal</option><option>Wheat bran</option><option>Premixes</option></select></label>
+                  <label class="search-box"><span aria-hidden="true">⌕</span><input id="supplier-location-search" type="search" placeholder="Filter by location" aria-label="Filter supplier quotes by location"></label>
+                </div>
+              </div>
+              <div class="table-wrap supplier-price-table"><table>
+                <thead><tr><th scope="col">Ingredient</th><th scope="col">Supplier</th><th scope="col">Location</th><th scope="col">Bag</th><th scope="col">Price / bag</th><th scope="col">Price / kg</th><th scope="col">Quote date</th></tr></thead>
+                <tbody id="supplier-quote-table"></tbody>
+              </table></div>
+            </section>
             <article class="panel listing-panel" id="listing-panel" hidden>
               <div class="panel-heading"><div><h2>New listing</h2><p>Listings are saved in this browser in this prototype.</p></div></div>
               <form id="listing-form" class="form-grid">
-                <label>What are you listing?<select name="kind" required><option>Eggs</option><option>Live birds</option><option>Poultry supplies</option></select></label>
+                <label>Post type<select name="kind" required><option>Eggs</option><option>Live birds</option><option>Poultry supplies</option><option>Feed for sale</option><option>Feed wanted (buy order)</option></select></label>
+                <div id="feed-type-field" class="wide-field feed-type-field" hidden><label>Feed type<select name="feedType" disabled><option>Layer mash</option><option>Chick starter</option><option>Broiler starter</option><option>Broiler grower</option><option>Broiler finisher</option><option>Other</option></select></label></div>
                 <label>Title<input name="title" maxlength="80" required placeholder="e.g. Fresh layers’ eggs"></label>
-                <label>Quantity<input name="quantity" maxlength="40" required placeholder="e.g. 20 trays"></label>
-                <label>Price (GHS)<input name="price" type="number" min="0" step="0.01" required placeholder="0.00"></label>
+                <label><span id="quantity-label">Quantity</span><input name="quantity" maxlength="40" required placeholder="e.g. 20 trays"></label>
+                <label><span id="listing-price-label">Price (GHS)</span><input name="price" type="number" min="0" step="0.01" required placeholder="0.00"></label>
                 <label class="wide-field">Location<input name="location" maxlength="80" required placeholder="Town or district"></label>
                 <div class="form-actions"><button class="button button-primary" type="submit">Publish listing</button><span class="form-status" id="listing-status" role="status"></span></div>
               </form>
             </article>
-            <div class="market-heading"><div><h2>Listings</h2><p id="listing-count">Listings from your farm</p></div><label class="search-box"><span aria-hidden="true">⌕</span><input id="listing-search" type="search" placeholder="Search listings" aria-label="Search listings"></label></div>
+            <div class="market-heading"><div><h2>Listings</h2><p id="listing-count">Listings from your farm</p></div><div class="market-filters"><label class="listing-filter"><span class="visually-hidden">Filter listings</span><select id="listing-filter" aria-label="Filter listings"><option value="all">All listings</option><option value="feed-sale">Feed for sale</option><option value="feed-wanted">Feed buy orders</option></select></label><label class="search-box"><span aria-hidden="true">⌕</span><input id="listing-search" type="search" placeholder="Search listings" aria-label="Search listings"></label></div></div>
             <div class="listing-grid" id="listing-grid"></div>
-            <p class="market-note">Prototype only: listings are local to this browser. LiveStock does not process orders, payments, or medicine sales here. Verify buyers and sellers before any transaction.</p>
+            <p class="market-note">Prototype only: posts are saved in this browser and are not visible to other farmers yet. LiveStock does not process orders or payments. Verify feed quality, seller details, and terms before any transaction.</p>
           </section>
           <footer class="content-footer">LiveStock <span>·</span> Helping your flocks thrive</footer>
         </div>
