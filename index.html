@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#183c32">
+    <meta name="description" content="LiveStock helps poultry farmers track flocks, find veterinary support, and connect with buyers.">
+    <title>LiveStock | Poultry farm companion</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Main navigation">
+        <a class="brand" href="#dashboard" aria-label="LiveStock home">
+          <span class="brand-mark" aria-hidden="true">L</span>
+          <span>Live<span class="brand-light">Stock</span></span>
+        </a>
+        <p class="nav-label">FARM WORKSPACE</p>
+        <nav class="main-nav">
+          <button class="nav-link active" type="button" data-view="dashboard"><span aria-hidden="true">⌂</span> Overview</button>
+          <button class="nav-link" type="button" data-view="flocks"><span aria-hidden="true">◉</span> My flocks</button>
+          <button class="nav-link" type="button" data-view="health"><span aria-hidden="true">＋</span> Health & vets</button>
+          <button class="nav-link" type="button" data-view="market"><span aria-hidden="true">▤</span> Marketplace</button>
+        </nav>
+        <div class="sidebar-note">
+          <span class="note-icon" aria-hidden="true">✦</span>
+          <strong>Good records, stronger flocks.</strong>
+          <p>Small updates today help you make better decisions tomorrow.</p>
+        </div>
+        <div class="sidebar-footer">Made for poultry farming in Ghana</div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div class="mobile-brand"><span class="brand-mark" aria-hidden="true">L</span> LiveStock</div>
+          <div class="farm-switcher">
+            <span class="farm-avatar" aria-hidden="true">A</span>
+            <span><strong>Adom Poultry Farm</strong><small>Eastern Region, Ghana</small></span>
+            <span class="chevron" aria-hidden="true">⌄</span>
+          </div>
+          <div class="topbar-right">
+            <span class="today" id="today-date"></span>
+            <button class="avatar-button" type="button" aria-label="Farmer profile">KA</button>
+          </div>
+        </header>
+
+        <div class="content-wrap">
+          <section class="view active" id="dashboard-view" aria-labelledby="welcome-title">
+            <div class="welcome-row">
+              <div>
+                <p class="eyebrow">FARM OVERVIEW</p>
+                <h1 id="welcome-title">Good morning, Kofi <span aria-hidden="true">✳</span></h1>
+                <p class="subheading">Here’s what’s happening with your farm today.</p>
+              </div>
+              <button class="button button-primary" type="button" data-go="flocks">＋ <span>Record an update</span></button>
+            </div>
+
+            <div class="stat-grid" aria-label="Farm summary">
+              <article class="stat-card">
+                <div class="stat-icon green" aria-hidden="true">◉</div>
+                <div><p>Active birds</p><strong id="active-birds">1,240</strong><small><span class="positive">↑ 40</span> from last month</small></div>
+                <span class="stat-sparkline green-line" aria-hidden="true">▂▃▂▅▄▆</span>
+              </article>
+              <article class="stat-card">
+                <div class="stat-icon orange" aria-hidden="true">◷</div>
+                <div><p>Flocks growing</p><strong id="flock-count">2</strong><small>Across your farm</small></div>
+                <span class="stat-sparkline orange-line" aria-hidden="true">▃▂▄▃▅▆</span>
+              </article>
+              <article class="stat-card">
+                <div class="stat-icon blue" aria-hidden="true">▤</div>
+                <div><p>Eggs collected</p><strong>186 <small class="unit">trays</small></strong><small>This week</small></div>
+                <span class="stat-sparkline blue-line" aria-hidden="true">▂▄▃▅▄▆</span>
+              </article>
+              <article class="stat-card">
+                <div class="stat-icon purple" aria-hidden="true">₵</div>
+                <div><p>Sales this month</p><strong>₵ 8,450</strong><small>From your records</small></div>
+                <span class="stat-sparkline purple-line" aria-hidden="true">▂▃▅▄▅▆</span>
+              </article>
+            </div>
+
+            <div class="section-heading">
+              <div><h2>Your flocks</h2><p>A quick look at your birds’ progress.</p></div>
+              <button class="text-button" type="button" data-go="flocks">View all flocks <span aria-hidden="true">→</span></button>
+            </div>
+            <div class="flock-grid" id="dashboard-flocks"></div>
+
+            <div class="lower-grid">
+              <article class="panel activity-panel">
+                <div class="panel-heading"><div><h2>Recent activity</h2><p>Latest updates from your farm</p></div><span class="more-dots" aria-hidden="true">•••</span></div>
+                <div class="activity-list" id="activity-list"></div>
+              </article>
+              <article class="panel reminder-panel">
+                <div class="panel-heading"><div><h2>Coming up</h2><p>Keep your routine on track</p></div><span class="calendar-icon" aria-hidden="true">▦</span></div>
+                <div class="reminder-item"><span class="reminder-dot amber"></span><span><strong>Vaccination check</strong><small>Layers Batch A · In 2 days</small></span><span class="reminder-tag">SOON</span></div>
+                <div class="reminder-item"><span class="reminder-dot green-dot"></span><span><strong>Feed stock review</strong><small>Broilers Batch B · In 5 days</small></span><span class="reminder-tag muted-tag">PLAN</span></div>
+                <button class="button button-soft full-button" type="button" data-go="flocks">See flock schedule</button>
+              </article>
+            </div>
+          </section>
+
+          <section class="view" id="flocks-view" aria-labelledby="flocks-title" hidden>
+            <div class="page-heading">
+              <div><p class="eyebrow">FLOCK MANAGEMENT</p><h1 id="flocks-title">My flocks</h1><p class="subheading">Track growth, care, and day-to-day farm records.</p></div>
+              <button class="button button-primary" type="button" id="show-log-form">＋ <span>Log a flock update</span></button>
+            </div>
+            <div class="flock-grid full-flock-grid" id="all-flocks"></div>
+            <article class="panel log-panel">
+              <div class="panel-heading"><div><h2>Record an update</h2><p>Add a note to your farm log. Records are saved in this browser.</p></div></div>
+              <form id="log-form" class="form-grid">
+                <label>Flock<select name="flock" id="log-flock" required></select></label>
+                <label>Update type<select name="type" required><option>Feed</option><option>Water</option><option>Weight</option><option>Vaccination</option><option>Treatment</option><option>Mortality</option><option>General note</option></select></label>
+                <label>Details<input name="details" required maxlength="180" placeholder="e.g. 2 bags of starter feed"></label>
+                <label>Date<input name="date" type="date" required></label>
+                <div class="form-actions"><button class="button button-primary" type="submit">Save update</button><span class="form-status" id="log-status" role="status"></span></div>
+              </form>
+            </article>
+            <article class="panel">
+              <div class="panel-heading"><div><h2>Farm log</h2><p>Your latest recorded flock updates</p></div></div>
+              <div class="table-wrap"><table><thead><tr><th>Date</th><th>Flock</th><th>Type</th><th>Details</th></tr></thead><tbody id="log-table"></tbody></table></div>
+            </article>
+          </section>
+
+          <section class="view" id="health-view" aria-labelledby="health-title" hidden>
+            <div class="page-heading">
+              <div><p class="eyebrow">CARE & SUPPORT</p><h1 id="health-title">Health & vets</h1><p class="subheading">Organize what you’re seeing and connect with qualified local help.</p></div>
+            </div>
+            <div class="health-grid">
+              <article class="panel triage-panel">
+                <div class="panel-heading"><div><h2>Describe a concern</h2><p>Share observations to prepare for a conversation with a vet.</p></div><span class="health-icon" aria-hidden="true">＋</span></div>
+                <form id="health-form" class="stack-form">
+                  <label>Which flock?
+                    <select id="health-flock" required></select>
+                  </label>
+                  <label>What have you noticed?
+                    <textarea id="symptoms" rows="4" maxlength="500" required placeholder="Describe changes in behavior, appetite, droppings, breathing, or egg production."></textarea>
+                  </label>
+                  <label class="check-row"><input id="urgent-signs" type="checkbox"> <span>Severe signs: sudden deaths, breathing difficulty, inability to stand, or rapid spread</span></label>
+                  <button class="button button-primary" type="submit">Prepare next steps</button>
+                </form>
+                <div id="health-result" class="health-result" role="status" hidden></div>
+                <p class="disclaimer"><strong>Important:</strong> LiveStock does not diagnose illness or prescribe treatment. A qualified veterinary professional must assess your birds and confirm care.</p>
+              </article>
+              <article class="panel vet-panel">
+                <div class="panel-heading"><div><h2>Nearby veterinary help</h2><p>Find a verified professional in your area</p></div><span class="location-icon" aria-hidden="true">⌖</span></div>
+                <div class="empty-directory">
+                  <span class="empty-icon" aria-hidden="true">⌖</span>
+                  <h3>Local directory coming soon</h3>
+                  <p>We’re building a verified directory for Ghana. Contact your district veterinary office or a known licensed vet while this directory is being set up.</p>
+                  <span class="verification-pill">Provider verification required</span>
+                </div>
+              </article>
+            </div>
+            <article class="safety-banner"><span aria-hidden="true">✦</span><p><strong>Medicines need the right guidance.</strong> Never use a medicine based only on an app suggestion. Use verified suppliers and follow the advice of a qualified vet.</p></article>
+          </section>
+
+          <section class="view" id="market-view" aria-labelledby="market-title" hidden>
+            <div class="page-heading">
+              <div><p class="eyebrow">GROW YOUR BUSINESS</p><h1 id="market-title">Marketplace</h1><p class="subheading">Create a listing and connect with potential buyers.</p></div>
+              <button class="button button-primary" type="button" id="show-listing-form">＋ <span>Create a listing</span></button>
+            </div>
+            <div class="market-banner"><div><span class="market-kicker">LOCAL CONNECTIONS</span><h2>Your next customer could be nearby.</h2><p>List eggs or birds, share availability, and start a conversation with buyers.</p></div><span class="market-art" aria-hidden="true">✳</span></div>
+            <article class="panel listing-panel" id="listing-panel" hidden>
+              <div class="panel-heading"><div><h2>New listing</h2><p>Listings are saved in this browser in this prototype.</p></div></div>
+              <form id="listing-form" class="form-grid">
+                <label>What are you listing?<select name="kind" required><option>Eggs</option><option>Live birds</option><option>Poultry supplies</option></select></label>
+                <label>Title<input name="title" maxlength="80" required placeholder="e.g. Fresh layers’ eggs"></label>
+                <label>Quantity<input name="quantity" maxlength="40" required placeholder="e.g. 20 trays"></label>
+                <label>Price (GHS)<input name="price" type="number" min="0" step="0.01" required placeholder="0.00"></label>
+                <label class="wide-field">Location<input name="location" maxlength="80" required placeholder="Town or district"></label>
+                <div class="form-actions"><button class="button button-primary" type="submit">Publish listing</button><span class="form-status" id="listing-status" role="status"></span></div>
+              </form>
+            </article>
+            <div class="market-heading"><div><h2>Listings</h2><p id="listing-count">Listings from your farm</p></div><label class="search-box"><span aria-hidden="true">⌕</span><input id="listing-search" type="search" placeholder="Search listings" aria-label="Search listings"></label></div>
+            <div class="listing-grid" id="listing-grid"></div>
+            <p class="market-note">Prototype only: listings are local to this browser. LiveStock does not process orders, payments, or medicine sales here. Verify buyers and sellers before any transaction.</p>
+          </section>
+          <footer class="content-footer">LiveStock <span>·</span> Helping your flocks thrive</footer>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>
