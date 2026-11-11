@@ -2,7 +2,9 @@ const storageKeys = {
   logs: "livestock-farm-logs",
   eggCollections: "livestock-egg-collections",
   listings: "livestock-market-listings",
-  supplierQuotes: "livestock-supplier-price-quotes"
+  supplierQuotes: "livestock-supplier-price-quotes",
+  feedUsage: "livestock-feed-usage-records",
+  syncQueue: "livestock-pending-sync"
 };
 
 const today = new Date();
@@ -11,6 +13,8 @@ const dateInputValue = [
   String(today.getMonth() + 1).padStart(2, "0"),
   String(today.getDate()).padStart(2, "0")
 ].join("-");
+const syncEndpoint = document.querySelector('meta[name="livestock-sync-endpoint"]')?.content.trim() ?? "";
+let syncInProgress = false;
 
 const flocks = [
   { id: "layers-a", name: "Layers Batch A", type: "Layers", birds: 640, startOffset: 48, targetDays: 140, next: "Vaccination check in 2 days" },
@@ -40,6 +44,9 @@ const feedIngredients = [
   "Maize", "Soybean meal", "Fishmeal", "Wheat bran", "Premixes", "Limestone",
   "Dicalcium phosphate", "Vegetable oil", "Salt", "Lysine", "Methionine"
 ];
+const priceIncreaseThreshold = 10;
+const consumptionDeviationThreshold = 25;
+const cheaperQuoteThreshold = 5;
 
 let healthPhotos = [];
 let healthPhotoUrls = [];
@@ -53,6 +60,65 @@ function readStoredList(key, fallback = []) {
 
 function writeStoredList(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
+}
+
+function updateConnectionStatus() {
+  const status = document.querySelector("#connection-status");
+  if (!status) return;
+  const pendingCount = readStoredList(storageKeys.syncQueue).length;
+  status.hidden = navigator.onLine && pendingCount === 0;
+  if (!navigator.onLine) {
+    status.textContent = "Offline · changes are saved on this device.";
+  } else if (pendingCount && !syncEndpoint) {
+    status.textContent = `${pendingCount} change${pendingCount === 1 ? "" : "s"} saved locally. Configure a sync server to share them across devices.`;
+  } else if (pendingCount) {
+    status.textContent = `${pendingCount} change${pendingCount === 1 ? "" : "s"} waiting to sync.`;
+  }
+}
+
+function queueSyncChange(type, data) {
+  const queue = readStoredList(storageKeys.syncQueue);
+  queue.push({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    type,
+    data,
+    createdAt: new Date().toISOString()
+  });
+  writeStoredList(storageKeys.syncQueue, queue);
+  updateConnectionStatus();
+  if (syncEndpoint && navigator.onLine) void syncPendingChanges();
+}
+
+async function syncPendingChanges() {
+  if (!syncEndpoint || !navigator.onLine || syncInProgress) {
+    updateConnectionStatus();
+    return;
+  }
+  const pending = readStoredList(storageKeys.syncQueue);
+  if (!pending.length) {
+    updateConnectionStatus();
+    return;
+  }
+  syncInProgress = true;
+  updateConnectionStatus();
+  let synced = false;
+  try {
+    const response = await fetch(syncEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ changes: pending })
+    });
+    if (!response.ok) throw new Error("Sync request failed");
+    const sentIds = new Set(pending.map((item) => item.id));
+    writeStoredList(storageKeys.syncQueue, readStoredList(storageKeys.syncQueue).filter((item) => !sentIds.has(item.id)));
+    synced = true;
+  } catch {
+    updateConnectionStatus();
+  } finally {
+    syncInProgress = false;
+    updateConnectionStatus();
+  }
+  if (synced && readStoredList(storageKeys.syncQueue).length) void syncPendingChanges();
 }
 
 function element(tag, className, text) {
@@ -413,6 +479,185 @@ function calculateFeedCost(event) {
   result.hidden = false;
 }
 
+function dateKeyDaysAgo(daysAgo) {
+  const date = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  date.setDate(date.getDate() - daysAgo);
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0")
+  ].join("-");
+}
+
+function renderFeedUsage() {
+  const records = readStoredList(storageKeys.feedUsage);
+  const latest = [...records].sort((a, b) => a.date.localeCompare(b.date) || a.recordedAt - b.recordedAt).at(-1);
+  const weekStart = dateKeyDaysAgo(6);
+  const monthStart = dateKeyDaysAgo(29);
+  const spendInRange = (startDate) => records
+    .filter((record) => record.date >= startDate && record.date <= dateInputValue)
+    .reduce((total, record) => total + Number(record.amountSpent), 0);
+
+  document.querySelector("#feed-use-weekly").textContent = records.length ? formatGhs(spendInRange(weekStart)) : "No records";
+  document.querySelector("#feed-use-monthly").textContent = records.length ? formatGhs(spendInRange(monthStart)) : "No records";
+
+  if (latest) {
+    const dailyFeedKg = Number(latest.dailyFeedKg);
+    const stockRemaining = Number(latest.stockRemaining);
+    const requirementDays = Number(document.querySelector("#feed-requirement-days").value) || 7;
+    const requiredKg = dailyFeedKg * requirementDays;
+    const stockCoverDays = stockRemaining / dailyFeedKg;
+    document.querySelector("#feed-use-daily").textContent = `${dailyFeedKg.toLocaleString("en-GH", { maximumFractionDigits: 2 })} kg / day`;
+    document.querySelector("#feed-use-per-bird").textContent = `${(dailyFeedKg * 1000 / Number(latest.birds)).toLocaleString("en-GH", { maximumFractionDigits: 1 })} g / bird`;
+    document.querySelector("#feed-use-stock").textContent = `${stockRemaining.toLocaleString("en-GH", { maximumFractionDigits: 2 })} kg`;
+    document.querySelector("#feed-use-required").textContent = `${requiredKg.toLocaleString("en-GH", { maximumFractionDigits: 2 })} kg / ${requirementDays} days`;
+    const stockStatus = document.querySelector("#feed-stock-status");
+    const shortageKg = Math.max(0, requiredKg - stockRemaining);
+    stockStatus.classList.toggle("feed-shortage", shortageKg > 0);
+    stockStatus.textContent = shortageKg > 0
+      ? `Current stock is short by ${shortageKg.toLocaleString("en-GH", { maximumFractionDigits: 2 })} kg for this plan; at the latest use rate it covers about ${stockCoverDays.toLocaleString("en-GH", { maximumFractionDigits: 1 })} days.`
+      : `Current stock covers this ${requirementDays}-day plan; at the latest use rate it covers about ${stockCoverDays.toLocaleString("en-GH", { maximumFractionDigits: 1 })} days.`;
+  } else {
+    for (const id of ["feed-use-daily", "feed-use-per-bird", "feed-use-stock", "feed-use-required"]) {
+      document.querySelector(`#${id}`).textContent = "No records";
+    }
+    const stockStatus = document.querySelector("#feed-stock-status");
+    stockStatus.classList.remove("feed-shortage");
+    stockStatus.textContent = "Save a daily record to see consumption, costs, and estimated stock cover.";
+  }
+
+  const history = document.querySelector("#feed-use-history");
+  history.replaceChildren();
+  if (!records.length) {
+    const row = element("tr");
+    const cell = element("td", "", "No feed records yet.");
+    cell.colSpan = 5;
+    row.append(cell);
+    history.append(row);
+    return;
+  }
+  for (const record of [...records].sort((a, b) => b.date.localeCompare(a.date) || b.recordedAt - a.recordedAt).slice(0, 10)) {
+    const row = document.createElement("tr");
+    for (const value of [
+      formatDate(record.date, { year: "numeric", month: "short", day: "numeric" }),
+      Number(record.birds).toLocaleString("en-GH"),
+      `${Number(record.dailyFeedKg).toLocaleString("en-GH", { maximumFractionDigits: 2 })} kg`,
+      formatGhs(record.amountSpent),
+      `${Number(record.stockRemaining).toLocaleString("en-GH", { maximumFractionDigits: 2 })} kg`
+    ]) {
+      row.append(element("td", "", value));
+    }
+    history.append(row);
+  }
+}
+
+function renderFeedRecommendations() {
+  const recommendations = [];
+  const usageRecords = readStoredList(storageKeys.feedUsage);
+  const latestUsage = [...usageRecords].sort((a, b) => a.date.localeCompare(b.date) || a.recordedAt - b.recordedAt).at(-1);
+
+  if (latestUsage) {
+    const dailyFeedKg = Number(latestUsage.dailyFeedKg);
+    const stockRemaining = Number(latestUsage.stockRemaining);
+    const planDays = Number(document.querySelector("#feed-requirement-days").value) || 7;
+    const requiredKg = dailyFeedKg * planDays;
+    if (stockRemaining < requiredKg) {
+      recommendations.push({
+        type: "attention",
+        title: "Feed stock may not cover your plan",
+        detail: `You have ${stockRemaining.toLocaleString("en-GH", { maximumFractionDigits: 2 })} kg for a ${planDays}-day estimate of ${requiredKg.toLocaleString("en-GH", { maximumFractionDigits: 2 })} kg. Review stock and upcoming deliveries.`
+      });
+    }
+
+    if (latestUsage.birdType && Number.isFinite(Number(latestUsage.ageWeeks))) {
+      const expected = getFeedStage(latestUsage.birdType, Number(latestUsage.ageWeeks)).dailyIntake;
+      const actual = dailyFeedKg * 1000 / Number(latestUsage.birds);
+      const deviation = (actual - expected) / expected * 100;
+      if (Math.abs(deviation) >= consumptionDeviationThreshold) {
+        const direction = deviation > 0 ? "above" : "below";
+        recommendations.push({
+          type: "attention",
+          title: "Feed use differs from the planning estimate",
+          detail: `Latest use is ${actual.toLocaleString("en-GH", { maximumFractionDigits: 1 })} g per bird per day, ${Math.abs(deviation).toLocaleString("en-GH", { maximumFractionDigits: 0 })}% ${direction} the ${expected} g planning estimate for ${getFeedStage(latestUsage.birdType, Number(latestUsage.ageWeeks)).name}. Check the record and feeding conditions.`
+        });
+      }
+    }
+  }
+
+  const reportedQuotes = readStoredList(storageKeys.supplierQuotes)
+    .filter((quote) => !quote.sample && Number(quote.price) > 0 && Number(quote.bagKg) > 0);
+  const recentQuotes = reportedQuotes.filter((quote) => quote.date >= dateKeyDaysAgo(90));
+  const priceHistories = new Map();
+  for (const quote of recentQuotes) {
+    const key = `${quote.ingredient}|${quote.location.toLocaleLowerCase()}|${quote.supplier.toLocaleLowerCase()}`;
+    const history = priceHistories.get(key) ?? [];
+    history.push(quote);
+    priceHistories.set(key, history);
+  }
+  for (const history of priceHistories.values()) {
+    history.sort((a, b) => a.date.localeCompare(b.date) || (a.recordedAt ?? 0) - (b.recordedAt ?? 0));
+    if (history.length < 2) continue;
+    const previous = history.at(-2);
+    const latest = history.at(-1);
+    const previousPerKg = Number(previous.price) / Number(previous.bagKg);
+    const latestPerKg = Number(latest.price) / Number(latest.bagKg);
+    const increase = (latestPerKg - previousPerKg) / previousPerKg * 100;
+    if (increase >= priceIncreaseThreshold) {
+      recommendations.push({
+        type: "attention",
+        title: `${latest.ingredient} price increased`,
+        detail: `${latest.supplier} in ${latest.location} is ${increase.toLocaleString("en-GH", { maximumFractionDigits: 0 })}% higher per kg than the previous report. Confirm the current quote before buying.`
+      });
+    }
+  }
+
+  const latestBySeller = new Map();
+  for (const quote of reportedQuotes.filter((item) => item.date >= dateKeyDaysAgo(30))) {
+    const key = `${quote.ingredient}|${quote.location.toLocaleLowerCase()}|${quote.supplier.toLocaleLowerCase()}`;
+    const current = latestBySeller.get(key);
+    if (!current || quote.date > current.date || (quote.date === current.date && (quote.recordedAt ?? 0) > (current.recordedAt ?? 0))) {
+      latestBySeller.set(key, quote);
+    }
+  }
+  const marketQuotes = new Map();
+  for (const quote of latestBySeller.values()) {
+    const key = `${quote.ingredient}|${quote.location.toLocaleLowerCase()}`;
+    const quotes = marketQuotes.get(key) ?? [];
+    quotes.push(quote);
+    marketQuotes.set(key, quotes);
+  }
+  for (const quotes of marketQuotes.values()) {
+    quotes.sort((a, b) => Number(a.price) / Number(a.bagKg) - Number(b.price) / Number(b.bagKg));
+    if (quotes.length < 2) continue;
+    const lower = quotes[0];
+    const higher = quotes[1];
+    const lowerPerKg = Number(lower.price) / Number(lower.bagKg);
+    const higherPerKg = Number(higher.price) / Number(higher.bagKg);
+    const saving = (higherPerKg - lowerPerKg) / higherPerKg * 100;
+    if (saving >= cheaperQuoteThreshold) {
+      recommendations.push({
+        type: "opportunity",
+        title: `Compare ${lower.ingredient} quotes in ${lower.location}`,
+        detail: `${lower.supplier} reported ${formatGhs(lowerPerKg)} per kg, ${saving.toLocaleString("en-GH", { maximumFractionDigits: 0 })}% below another recent quote. Verify supplier, quality, and availability before switching.`
+      });
+    }
+  }
+
+  const container = document.querySelector("#feed-recommendations");
+  container.replaceChildren();
+  if (!recommendations.length) {
+    container.append(element("p", "recommendations-empty", "No alerts yet. Record feed use and supplier quotes to surface price, stock, and consumption changes."));
+    return;
+  }
+  for (const recommendation of recommendations.slice(0, 5)) {
+    const item = element("article", `recommendation-item ${recommendation.type}`);
+    const copy = document.createElement("div");
+    copy.append(element("strong", "", recommendation.title), element("p", "", recommendation.detail));
+    item.append(copy);
+    container.append(item);
+  }
+}
+
 function navigate(viewName) {
   document.querySelectorAll(".view").forEach((view) => {
     const active = view.id === `${viewName}-view`;
@@ -453,6 +698,81 @@ document.querySelector("#feed-calc-form").addEventListener("input", () => {
   document.querySelector("#feed-calc-result").hidden = true;
 });
 document.querySelector("#feed-calc-form").addEventListener("submit", calculateFeedCost);
+
+document.querySelector("#feed-use-form").elements.date.value = dateInputValue;
+document.querySelector("#feed-use-form").elements.date.max = dateInputValue;
+document.querySelector("#feed-use-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const records = readStoredList(storageKeys.feedUsage);
+  const record = {
+    birdType: data.get("birdType"),
+    ageWeeks: Number(data.get("ageWeeks")),
+    birds: Number(data.get("birds")),
+    dailyFeedKg: Number(data.get("dailyFeedKg")),
+    amountSpent: Number(data.get("amountSpent")),
+    stockRemaining: Number(data.get("stockRemaining")),
+    date: data.get("date"),
+    recordedAt: Date.now()
+  };
+  records.push(record);
+  writeStoredList(storageKeys.feedUsage, records);
+  queueSyncChange("feed_usage", record);
+  form.reset();
+  form.elements.date.value = dateInputValue;
+  document.querySelector("#feed-use-status").textContent = "Feed record saved in this browser.";
+  renderFeedUsage();
+  renderFeedRecommendations();
+});
+document.querySelector("#feed-requirement-days").addEventListener("input", renderFeedUsage);
+renderFeedUsage();
+renderFeedRecommendations();
+
+const feedCycleStart = document.querySelector("#feed-cycle-start");
+const feedCycleEnd = document.querySelector("#feed-cycle-end");
+feedCycleStart.value = dateKeyDaysAgo(29);
+feedCycleEnd.value = dateInputValue;
+feedCycleStart.max = dateInputValue;
+feedCycleEnd.max = dateInputValue;
+
+document.querySelector("#use-logged-cycle-spend").addEventListener("click", () => {
+  const start = feedCycleStart.value;
+  const end = feedCycleEnd.value;
+  const status = document.querySelector("#feed-cycle-source-status");
+  if (!start || !end || start > end) {
+    status.textContent = "Choose a valid cycle date range first.";
+    return;
+  }
+  const cycleRecords = readStoredList(storageKeys.feedUsage)
+    .filter((record) => record.date >= start && record.date <= end);
+  const spend = cycleRecords.reduce((total, record) => total + Number(record.amountSpent), 0);
+  document.querySelector("#feed-cycle-spend").value = spend.toFixed(2);
+  status.textContent = cycleRecords.length
+    ? `Loaded ${cycleRecords.length} logged feed expense${cycleRecords.length === 1 ? "" : "s"}. Add any unlogged spend if needed.`
+    : "No logged feed expenses in this date range.";
+});
+
+document.querySelector("#feed-impact-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  if (data.get("start") > data.get("end")) {
+    document.querySelector("#feed-impact-status").textContent = "Cycle end must be on or after the start date.";
+    return;
+  }
+  const birds = Number(data.get("birds"));
+  const spend = Number(data.get("spend"));
+  const savingsPercent = Number(data.get("savingsPercent"));
+  const savings = spend * savingsPercent / 100;
+  const perBird = spend / birds;
+  document.querySelector("#feed-impact-per-bird").textContent = formatGhs(perBird);
+  document.querySelector("#feed-impact-savings").textContent = formatGhs(savings);
+  document.querySelector("#feed-impact-adjusted-spend").textContent = formatGhs(spend - savings);
+  document.querySelector("#feed-impact-profit-uplift").textContent = formatGhs(savings);
+  document.querySelector("#feed-impact-status").textContent = "Estimate based on the entered cycle spend and saving percentage.";
+  document.querySelector("#feed-impact-results").hidden = false;
+});
 
 document.querySelector("#show-log-form").addEventListener("click", () => {
   document.querySelector("#log-form").scrollIntoView({ behavior: "smooth", block: "center" });
@@ -611,20 +931,24 @@ document.querySelector("#supplier-quote-form").addEventListener("submit", (event
   const form = event.currentTarget;
   const data = new FormData(form);
   const quotes = readStoredList(storageKeys.supplierQuotes);
-  quotes.push({
+  const quote = {
     supplier: String(data.get("supplier")).trim(),
     ingredient: data.get("ingredient"),
     price: Number(data.get("price")),
     bagKg: Number(data.get("bagKg")),
     location: String(data.get("location")).trim(),
     date: data.get("date"),
-    sample: false
-  });
+    sample: false,
+    recordedAt: Date.now()
+  };
+  quotes.push(quote);
   writeStoredList(storageKeys.supplierQuotes, quotes);
+  queueSyncChange("supplier_quote", quote);
   form.reset();
   form.elements.date.value = dateInputValue;
   document.querySelector("#supplier-quote-status").textContent = "Quote saved in this browser.";
   renderSupplierQuotes();
+  renderFeedRecommendations();
 });
 
 document.querySelector("#supplier-quote-form").elements.date.value = dateInputValue;
@@ -646,6 +970,7 @@ document.querySelector("#listing-form").addEventListener("submit", (event) => {
     sample: false
   });
   writeStoredList(storageKeys.listings, listings);
+  queueSyncChange("marketplace_listing", listings[0]);
   form.reset();
   updateListingForm();
   const isBuyOrder = data.get("kind") === "Feed wanted (buy order)";
@@ -688,3 +1013,15 @@ renderLogs();
 renderEggCollections();
 renderSupplierQuotes();
 renderListings();
+updateConnectionStatus();
+window.addEventListener("online", syncPendingChanges);
+window.addEventListener("offline", updateConnectionStatus);
+if (navigator.onLine) void syncPendingChanges();
+
+if ("serviceWorker" in navigator && window.isSecureContext && location.protocol !== "file:") {
+  navigator.serviceWorker.register("./sw.js").catch(() => {
+    const status = document.querySelector("#connection-status");
+    status.hidden = false;
+    status.textContent = "Offline app caching could not be enabled on this origin.";
+  });
+}

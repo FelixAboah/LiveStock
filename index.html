@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#183c32">
     <meta name="description" content="LiveStock helps poultry farmers track flocks, find veterinary support, and connect with buyers.">
+    <meta name="livestock-sync-endpoint" content="">
     <title>LiveStock | Poultry farm companion</title>
+    <link rel="manifest" href="manifest.webmanifest">
     <link rel="stylesheet" href="styles.css">
     <script src="app.js" defer></script>
   </head>
@@ -45,6 +47,7 @@
             <button class="avatar-button" type="button" aria-label="Farmer profile">KA</button>
           </div>
         </header>
+        <div id="connection-status" class="connection-status" role="status" hidden></div>
 
         <div class="content-wrap">
           <section class="view active" id="dashboard-view" aria-labelledby="welcome-title">
@@ -181,6 +184,11 @@
             <div class="page-heading">
               <div><p class="eyebrow">FEED PLANNING</p><h1 id="feed-calculator-title">Feed calculator</h1><p class="subheading">Cost a formulation for your flock using ingredients and prices you have.</p></div>
             </div>
+            <article class="panel feed-recommendations-panel">
+              <div class="panel-heading"><div><h2>Feed recommendations</h2><p>Alerts are based on your saved feed records and supplier reports.</p></div></div>
+              <div id="feed-recommendations" class="feed-recommendations" aria-live="polite"></div>
+              <p class="recommendation-rules">Alerts flag price rises of 10% or more, consumption differences of 25% or more from the planning estimate, and same-ingredient quotes at least 5% lower. Supplier and feed quality are not verified.</p>
+            </article>
             <div class="feed-calculator-grid">
               <article class="panel feed-input-panel">
                 <div class="panel-heading"><div><h2>Flock and batch</h2><p>Set the amount of feed you want to prepare.</p></div></div>
@@ -215,6 +223,66 @@
                 <aside class="safety-banner feed-nutrition-note"><span aria-hidden="true">✦</span><p><strong>Costing is not nutrition validation.</strong> This tool checks recipe percentages and estimates cost only. It does not verify protein, energy, amino acids, minerals, or vitamin requirements. Use a formulation approved by a qualified poultry nutritionist or veterinarian.</p></aside>
               </div>
             </div>
+            <section class="feed-usage-section" aria-labelledby="feed-usage-title">
+              <div class="section-heading"><div><h2 id="feed-usage-title">Feed use and stock</h2><p>Log daily flock use and feed spending to track costs and stock cover.</p></div></div>
+              <div class="feed-usage-grid">
+                <article class="panel feed-usage-entry-panel">
+                  <div class="panel-heading"><div><h2>Daily feed record</h2><p>Records are saved in this browser.</p></div></div>
+                  <form id="feed-use-form" class="form-grid">
+                    <label>Bird type<select name="birdType" required><option value="broiler">Broiler</option><option value="layer">Layer</option></select></label>
+                    <label>Bird age (weeks)<input name="ageWeeks" type="number" min="0" max="100" step="1" required value="4"></label>
+                    <label>Number of birds<input name="birds" type="number" min="1" step="1" required value="100"></label>
+                    <label>Feed used daily (kg)<input name="dailyFeedKg" type="number" min="0.01" step="0.01" required placeholder="e.g. 10"></label>
+                    <label>Feed spend on this date (GHS)<input name="amountSpent" type="number" min="0" step="0.01" required value="0"></label>
+                    <label>Feed remaining in storage (kg)<input name="stockRemaining" type="number" min="0" step="0.01" required placeholder="e.g. 120"></label>
+                    <label>Date<input name="date" type="date" required></label>
+                    <div class="form-actions"><button class="button button-primary" type="submit">Save daily record</button><span id="feed-use-status" class="form-status" role="status"></span></div>
+                  </form>
+                  <p class="offline-help">Records are saved on this device. Cross-device sync requires a configured server connection.</p>
+                </article>
+                <article class="panel feed-usage-summary-panel">
+                  <div class="panel-heading"><div><h2>Feed summary</h2><p>Based on your latest record and dated spend entries.</p></div></div>
+                  <label class="feed-planning-days">Estimate requirements for (days)<input id="feed-requirement-days" type="number" min="1" max="90" step="1" value="7"></label>
+                  <div class="feed-usage-stats">
+                    <div><span>Daily feed consumption</span><strong id="feed-use-daily">No records</strong></div>
+                    <div><span>Daily per bird</span><strong id="feed-use-per-bird">No records</strong></div>
+                    <div><span>Feed spend · 7 days</span><strong id="feed-use-weekly">No records</strong></div>
+                    <div><span>Feed spend · 30 days</span><strong id="feed-use-monthly">No records</strong></div>
+                    <div><span>Feed remaining</span><strong id="feed-use-stock">No records</strong></div>
+                    <div><span>Estimated feed required</span><strong id="feed-use-required">No records</strong></div>
+                  </div>
+                  <p id="feed-stock-status" class="feed-stock-status" role="status">Save a daily record to see consumption, costs, and estimated stock cover.</p>
+                </article>
+              </div>
+              <article class="panel feed-usage-history-panel">
+                <div class="panel-heading"><div><h2>Recent feed records</h2><p>Most recent dates first</p></div></div>
+                <div class="table-wrap"><table><thead><tr><th scope="col">Date</th><th scope="col">Birds</th><th scope="col">Feed used / day</th><th scope="col">Spend</th><th scope="col">Stock remaining</th></tr></thead><tbody id="feed-use-history"></tbody></table></div>
+              </article>
+            </section>
+            <section class="feed-profitability-section" aria-labelledby="feed-profitability-title">
+              <div class="section-heading"><div><h2 id="feed-profitability-title">Feed cost and profitability</h2><p>Estimate feed cost per bird and model savings across a production cycle.</p></div></div>
+              <article class="panel feed-impact-panel">
+                <form id="feed-impact-form" class="form-grid">
+                  <label>Cycle start<input id="feed-cycle-start" name="start" type="date" required></label>
+                  <label>Cycle end<input id="feed-cycle-end" name="end" type="date" required></label>
+                  <label>Birds in this cycle<input name="birds" type="number" min="1" step="1" required value="100"></label>
+                  <label>Feed spend this cycle (GHS)<input id="feed-cycle-spend" name="spend" type="number" min="0" step="0.01" required placeholder="e.g. 10000"></label>
+                  <label>Potential saving from comparable quote (%)<input name="savingsPercent" type="number" min="0" max="100" step="0.1" required value="0"></label>
+                  <div class="feed-impact-actions">
+                    <button class="button button-soft" id="use-logged-cycle-spend" type="button">Use logged spend</button>
+                    <span id="feed-cycle-source-status" class="form-status" role="status"></span>
+                  </div>
+                  <div class="form-actions"><button class="button button-primary" type="submit">Estimate cycle impact</button><span id="feed-impact-status" class="form-status" role="status"></span></div>
+                </form>
+                <div class="feed-impact-results" id="feed-impact-results" hidden aria-live="polite">
+                  <div><span>Current feed cost / bird</span><strong id="feed-impact-per-bird"></strong></div>
+                  <div><span>Potential cycle savings</span><strong id="feed-impact-savings"></strong></div>
+                  <div><span>Feed spend after switch</span><strong id="feed-impact-adjusted-spend"></strong></div>
+                  <div><span>Potential profit uplift*</span><strong id="feed-impact-profit-uplift"></strong></div>
+                </div>
+                <p class="feed-impact-disclaimer"><strong>Scenario only.</strong> Enter a saving based on a supplier you have checked. The app does not verify suppliers or confirm equal feed quality or nutrition. *Savings increase profit by the same amount only if feed quality, bird performance, and all other costs remain equivalent.</p>
+              </article>
+            </section>
           </section>
 
           <section class="view" id="market-view" aria-labelledby="market-title" hidden>
