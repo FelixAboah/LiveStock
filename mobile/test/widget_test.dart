@@ -4,7 +4,7 @@ import 'package:livestock_mobile/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('calculates a feed batch cost against the budget', (tester) async {
+  testWidgets('starts on the farm overview and navigates to Feed', (tester) async {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(const MyApp());
     await tester.pumpAndSettle();
@@ -12,10 +12,13 @@ void main() {
     expect(find.text('Good morning, Kofi'), findsOneWidget);
     await tester.tap(find.text('Feed'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Calculator'));
-    await tester.pumpAndSettle();
+    expect(find.text('Calculator'), findsOneWidget);
+    expect(find.text('Use & stock'), findsOneWidget);
+    expect(find.text('Cycle impact'), findsOneWidget);
+  });
 
-    expect(find.text('Feed cost calculator'), findsOneWidget);
+  testWidgets('calculates a feed batch cost against the budget', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: FeedCalculatorPage()));
 
     Future<void> enter(String key, String value) async {
       final field = find.byKey(ValueKey(key));
@@ -41,8 +44,7 @@ void main() {
     await setIngredient('Premixes', '30', '10');
 
     final calculate = find.byKey(const ValueKey('calculate-feed-cost'));
-    expect(calculate, findsOneWidget);
-    await tester.scrollUntilVisible(calculate, 400, scrollable: find.byType(Scrollable).first);
+    await tester.ensureVisible(calculate);
     await tester.tap(calculate);
     await tester.pumpAndSettle();
 

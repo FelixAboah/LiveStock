@@ -282,6 +282,45 @@ class _FlocksScreenState extends State<FlocksScreen> {
     details.dispose();
   }
 
+  Future<void> _logEggCollection() async {
+    final trays = TextEditingController();
+    final notes = TextEditingController();
+    var flockId = widget.store.flocks.firstOrNull?['id']?.toString();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Log egg collection'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: flockId,
+                decoration: const InputDecoration(labelText: 'Flock'),
+                items: widget.store.flocks.where((flock) => flock['birdType'] == 'Layer').map((flock) => DropdownMenuItem(value: flock['id'].toString(), child: Text(flock['name'].toString()))).toList(),
+                onChanged: (value) => setDialogState(() => flockId = value),
+              ),
+              const SizedBox(height: 10),
+              TextField(controller: trays, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Trays collected')),
+              const SizedBox(height: 10),
+              TextField(controller: notes, decoration: const InputDecoration(labelText: 'Notes (optional)')),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, (double.tryParse(trays.text) ?? 0) > 0 && flockId != null), child: const Text('Save collection')),
+          ],
+        ),
+      ),
+    );
+    if (result == true) {
+      final flock = widget.store.flocks.firstWhere((item) => item['id'].toString() == flockId);
+      await widget.store.addEggCollection({'flockId': flockId, 'flockName': flock['name'], 'trays': double.parse(trays.text), 'notes': notes.text.trim(), 'date': DateTime.now().toIso8601String()});
+    }
+    trays.dispose();
+    notes.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -328,6 +367,24 @@ class _FlocksScreenState extends State<FlocksScreen> {
                     ),
                   );
                 }),
+              const SizedBox(height: 9),
+              SectionHeading(
+                title: 'Egg collection',
+                subtitle: 'Record trays from layer flocks.',
+                trailing: IconButton.filledTonal(onPressed: widget.store.flocks.any((flock) => flock['birdType'] == 'Layer') ? _logEggCollection : null, tooltip: 'Log egg collection', icon: const Icon(Icons.add)),
+              ),
+              const SizedBox(height: 8),
+              if (widget.store.eggCollections.isEmpty)
+                const LiveStockPanel(child: EmptyHint(icon: Icons.egg_outlined, title: 'No egg collections logged', detail: 'Save a tray count to include it in the overview.'))
+              else
+                ...widget.store.eggCollections.take(4).map((collection) => Padding(
+                      padding: const EdgeInsets.only(bottom: 7),
+                      child: LiveStockPanel(
+                        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+                        child: Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(collection['flockName'].toString(), style: const TextStyle(fontWeight: FontWeight.w700)), Text(formatFarmDate(collection['date']), style: Theme.of(context).textTheme.labelSmall?.copyWith(color: LiveStockColors.muted))])), Text('${collection['trays']} trays', style: const TextStyle(fontWeight: FontWeight.w800))]),
+                      ),
+                    )),
+              const SizedBox(height: 10),
               const LocalOnlyNote(),
             ],
           ),
