@@ -168,6 +168,32 @@ td:first-child { white-space: nowrap; }
 .safety-banner { display: flex; align-items: flex-start; gap: 11px; margin-top: 15px; border: 1px solid #ede5d0; border-radius: 10px; padding: 14px 16px; background: #fffcf4; color: #7b6540; }
 .safety-banner > span { color: #c59746; }
 .safety-banner p { margin: 0; font-size: 10px; line-height: 1.55; }
+.feed-calculator-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(300px, .7fr); align-items: start; gap: 15px; }
+.feed-input-panel, .feed-result-panel { min-width: 0; }
+.feed-flock-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.feed-stage-hint { margin: -2px 0 0; border-left: 3px solid #86a67f; padding: 8px 10px; background: #f5f8f2; color: #647168; font-size: 10px; line-height: 1.5; }
+.feed-ingredients-heading { margin-top: 5px; }
+.feed-ingredients-heading h2 { margin: 0 0 4px; font: 700 13px Manrope, sans-serif; }
+.feed-ingredients-heading p { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+.feed-ingredient-table-wrap { max-height: 380px; border: 1px solid var(--line); border-radius: 8px; }
+.feed-ingredient-table { min-width: 480px; }
+.feed-ingredient-table th { position: sticky; top: 0; z-index: 1; background: #f8faf7; }
+.feed-ingredient-table td { padding: 7px 8px; }
+.feed-ingredient-table td:first-child { width: 65px; text-align: center; }
+.feed-ingredient-table input[type="checkbox"] { width: 16px; min-height: 16px; height: 16px; padding: 0; accent-color: var(--green); }
+.feed-ingredient-table input[type="number"] { min-width: 84px; min-height: 33px; padding: 6px 7px; font-size: 10px; }
+.feed-results-column { display: grid; gap: 14px; }
+.feed-result-panel { padding: 16px; }
+.feed-cost-summary { display: grid; gap: 8px; margin-bottom: 14px; }
+.feed-cost-summary > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #eff2ee; padding-bottom: 8px; }
+.feed-cost-summary span { color: var(--muted); font-size: 10px; }
+.feed-cost-summary strong { font: 700 14px Manrope, sans-serif; white-space: nowrap; }
+.feed-cost-table-wrap { overflow-x: auto; }
+.feed-cost-table { min-width: 320px; }
+.feed-cost-table th, .feed-cost-table td { padding-inline: 5px; }
+.feed-budget-status { margin: 12px 0 0; color: #47764e; font-size: 11px; font-weight: 700; }
+.feed-budget-status.over-budget { color: #9a572f; }
+.feed-nutrition-note { margin: 0; }
 .market-banner { position: relative; display: flex; min-height: 147px; align-items: center; justify-content: space-between; overflow: hidden; margin-bottom: 22px; border-radius: 12px; padding: 22px 26px; background: #edf4e9; }
 .market-banner h2 { margin: 7px 0; font: 700 19px Manrope, sans-serif; letter-spacing: -.5px; }
 .market-banner p { margin: 0; color: #6f7f70; font-size: 10px; }
@@ -217,6 +243,7 @@ td:first-child { white-space: nowrap; }
   .main-content { margin-left: 210px; }
   .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stat-card { min-height: 105px; }
+  .feed-calculator-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
   .sidebar { position: fixed; inset: auto 0 0; width: 100%; height: 64px; flex-direction: row; align-items: center; justify-content: center; padding: 5px 8px; }
@@ -242,6 +269,7 @@ td:first-child { white-space: nowrap; }
   .stat-card strong { font-size: 18px; }
   .stat-sparkline { right: 7px; bottom: 7px; font-size: 14px; }
   .flock-grid, .lower-grid, .health-grid, .listing-grid { grid-template-columns: 1fr; }
+  .feed-flock-fields { grid-template-columns: 1fr; }
   .lower-grid { margin-top: 15px; }
   .page-heading { flex-direction: column; }
   .page-heading .button { align-self: stretch; }

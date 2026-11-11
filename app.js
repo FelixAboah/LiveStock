@@ -375,7 +375,8 @@ function calculateFeedCost(event) {
     status.textContent = `Ingredient inclusion must total 100%. Current total: ${totalInclusion.toLocaleString("en-GH", { maximumFractionDigits: 1 })}%.`;
     return;
   }
-  if (recipe.some((item) => item.inclusion > 0 && (!Number.isFinite(item.price) || item.price <= 0))) {
+  const usedRecipe = recipe.filter((item) => item.inclusion > 0);
+  if (usedRecipe.some((item) => !Number.isFinite(item.price) || item.price <= 0)) {
     status.textContent = "Enter a valid price per kg for every ingredient used in the mix.";
     return;
   }
@@ -385,7 +386,7 @@ function calculateFeedCost(event) {
   const dailyIntake = Number(document.querySelector("#feed-daily-intake").value);
   const budget = Number(document.querySelector("#feed-budget").value);
   const batchKg = birds * days * dailyIntake / 1000;
-  const totalCost = recipe.reduce((total, item) => total + batchKg * item.inclusion / 100 * item.price, 0);
+  const totalCost = usedRecipe.reduce((total, item) => total + batchKg * item.inclusion / 100 * item.price, 0);
   const costPerKg = totalCost / batchKg;
 
   document.querySelector("#feed-result-summary").textContent = `${batchKg.toLocaleString("en-GH", { maximumFractionDigits: 2 })} kg for ${birds.toLocaleString("en-GH")} birds over ${days} day${days === 1 ? "" : "s"}.`;
@@ -395,7 +396,7 @@ function calculateFeedCost(event) {
 
   const costRows = document.querySelector("#feed-cost-rows");
   costRows.replaceChildren();
-  for (const item of recipe.filter((ingredient) => ingredient.inclusion > 0)) {
+  for (const item of usedRecipe) {
     const amountKg = batchKg * item.inclusion / 100;
     const row = document.createElement("tr");
     for (const value of [item.ingredient, `${item.inclusion.toLocaleString("en-GH", { maximumFractionDigits: 1 })}%`, `${amountKg.toLocaleString("en-GH", { maximumFractionDigits: 2 })} kg`, formatGhs(amountKg * item.price)]) {
